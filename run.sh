@@ -58,12 +58,9 @@ else
   wait_for_url "http://localhost:8082/health" "storage tier 2"
 fi
 
-if [[ -x "${ROOT_DIR}/load_test_data.sh" ]]; then
-  log "seeding test data"
-  "${ROOT_DIR}/load_test_data.sh"
-elif [[ -x "${ROOT_DIR}/scripts/load_test_data.sh" ]]; then
-  log "seeding test data"
-  "${ROOT_DIR}/scripts/load_test_data.sh"
+if [[ -x "${ROOT_DIR}/scripts/run_mongosh.sh" ]]; then
+  log "seeding and verifying test data"
+  "${ROOT_DIR}/scripts/run_mongosh.sh" seed_test_data.js verify_test_data.js
 fi
 
 log "health checks"
@@ -87,6 +84,7 @@ Services:
   MongoDB:         mongodb://localhost:27017
 
 Useful commands:
+  ./scripts/run_mongosh.sh seed_test_data.js verify_test_data.js
   docker compose logs -f
   docker compose down
   make test-health

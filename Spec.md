@@ -80,8 +80,9 @@ All endpoints require `Authorization: Bearer <JWT>`.
 ### Storage implementation:
 * **PoC default:** MongoDB runs in Docker Compose (`mongo:7` image, service name `mongo`, port `27017` published to the host for seed scripts).
 * One MongoDB instance hosts all logical databases (no Atlas or external cluster required for the POC).
-* **Connection string:** `MONGODB_URI` environment variable (e.g. `mongodb://mongo:27017` from app containers on the Compose network; `mongodb://localhost:27017` from the host when running `load_test_data.sh`).
-* `load_test_data.sh` seeds all databases idempotently (upsert) against the local Mongo instance.
+* **Connection string:** `MONGODB_URI` environment variable (e.g. `mongodb://mongo:27017` from app containers on the Compose network; `mongodb://localhost:27017` from the host when running mongosh scripts from `scripts/`).
+* `scripts/run_mongosh.sh` runs one or more mongosh `.js` files against the local Mongo instance (waits for Mongo, resolves host vs Docker `mongosh`).
+* `scripts/seed_test_data.js` seeds all databases idempotently (upsert); `scripts/verify_test_data.js` checks document counts. `run.sh` runs both via `scripts/run_mongosh.sh` after startup.
 * **Identity database** (`identity`) — used by global tier; collections:
     * `user_team_memberships` — user to teams mapping
     * `team_storage_routing` — team to storage tier ID mapping
