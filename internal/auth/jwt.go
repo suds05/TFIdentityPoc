@@ -38,6 +38,8 @@ func BearerToken(header string) (string, error) {
 }
 
 // ParseUserJWT validates an HS256 JWT and returns canonical user claims.
+// TODO:sudhakar - We are currently doing a simple HMAC validation.
+// This should witch to validating with Auth provider's public key.
 func ParseUserJWT(secret, tokenString string) (UserClaims, error) {
 	if secret == "" {
 		return UserClaims{}, errors.New("jwt secret not configured")

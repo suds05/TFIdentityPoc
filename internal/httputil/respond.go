@@ -18,3 +18,17 @@ func Unauthorized(w http.ResponseWriter) {
 		"error": "unauthorized",
 	})
 }
+
+// Forbidden writes a 403 JSON error body.
+func Forbidden(w http.ResponseWriter) {
+	WriteJSON(w, http.StatusForbidden, map[string]string{
+		"error": "forbidden",
+	})
+}
+
+// NotFound writes a 404 JSON error body.
+func NotFound(w http.ResponseWriter) {
+	WriteJSON(w, http.StatusNotFound, map[string]string{
+		"error": "not found",
+	})
+}

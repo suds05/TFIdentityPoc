@@ -197,7 +197,7 @@ For POC:
 * Example payload: `{ "sub": "usr_sudhakan", "email": "sudhakan@gmail.com", "org_id": "org_acme" }`.
 * Invalid or missing token → Unauthorized (`401`) error.
 
-### Postman test scenarios (JWT `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`):
+### Curl/Postman test scenarios (JWT `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`):
 
 | Scenario | Service | Team ID | Expected |
 |----------|---------|---------|----------|
@@ -206,3 +206,45 @@ For POC:
 | List folders (not a member) | Storage tier 1 `:8081` | `qa` | 403 |
 | List folders (member, wrong tier) | Storage tier 1 `:8081` | `marketing` | 404 |
 | List folders (member, correct tier) | Storage tier 2 `:8082` | `marketing` | 200; folders for marketing |
+
+### Transcript from run.sh
+```log
+ Building 3/3
+ ✔ global          Built                                                                                                            0.0s 
+ ✔ storage-tier-1  Built                                                                                                            0.0s 
+ ✔ storage-tier-2  Built                                                                                                            0.0s 
+==> starting services
+==> seeding and verifying test data
+==> waiting for MongoDB at mongodb://localhost:27017
+==> running seed_test_data.js
+seed complete: global (2 collections), storage_tier_1, storage_tier_2
+==> running verify_test_data.js
+{
+  global_user_team_memberships: 1,
+  global_team_storage_routing: 5,
+  storage_tier_1_teams: 3,
+  storage_tier_2_teams: 2
+}
+verify complete: all counts match expected seed data
+==> health checks
+  global:          {"status":"ok"}
+  storage tier 1:  {"status":"ok","tierId":1}
+  storage tier 2:  {"status":"ok","tierId":2}
+==> stack is up
+
+==> testing discover API
+==> discover API smoke test (http://localhost:8080)
+  discover (no auth):     401 OK
+  discover (usr_sudhakan): 200 OK  {"teamIds":["engineering","marketing"],"teams":[{"teamId":"engineering","storageTierId":1},{"teamId":"marketing","storageTierId":2}]}
+  discover (usr_unknown): 401 OK
+
+==> testing list folders API
+==> list folders API smoke test
+  tier1 engineering (member): 200 OK  {"teamId":"engineering","folders":[{"folderId":"code","name":"Code"},{"folderId":"specs","name":"Specs"}]}
+  tier1 qa (not a member): 403 OK
+  tier1 marketing (wrong tier): 404 OK
+  tier2 marketing (member): 200 OK  {"teamId":"marketing","folders":[{"folderId":"campaigns","name":"Campaigns"},{"folderId":"creative","name":"Creative"}]}
+  tier1 no auth: 401 OK
+
+==> All good!
+```

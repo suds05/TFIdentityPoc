@@ -23,8 +23,12 @@ paths:
       responses:
         "200":
           description: Folder list for the team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListFoldersResponse"
         "401":
-          description: Missing or invalid JWT
+          description: Missing or invalid JWT, or global tier rejected the user
         "403":
           description: User not authorized for this team
         "404":
@@ -35,3 +39,26 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    ListFoldersResponse:
+      type: object
+      required:
+        - teamId
+        - folders
+      properties:
+        teamId:
+          type: string
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Folder"
+    Folder:
+      type: object
+      required:
+        - folderId
+        - name
+      properties:
+        folderId:
+          type: string
+        name:
+          type: string

@@ -72,25 +72,16 @@ curl -sf "http://localhost:8081/health"
 echo
 printf '  storage tier 2:  '
 curl -sf "http://localhost:8082/health"
-
-cat <<EOF
-Services:
-  Global tier:     http://localhost:8080
-  Storage tier 1:  http://localhost:8081
-  Storage tier 2:  http://localhost:8082
-  MongoDB:         mongodb://localhost:27017
-
-Useful commands:
-  ./scripts/test_discover_api.sh
-  ./scripts/run_mongosh.sh seed_test_data.js verify_test_data.js
-  docker compose logs -f
-  docker compose down
-  make test-health
-EOF
+echo
 log "stack is up"
 echo
 
+log "testing discover API"
 "${ROOT_DIR}/scripts/test_discover_api.sh"
+echo
+
+log "testing list folders API"
+"${ROOT_DIR}/scripts/test_list_folders.sh"
 echo
 
 log "All good!"
