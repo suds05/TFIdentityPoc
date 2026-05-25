@@ -25,7 +25,7 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0")
 
-Runs list-folders smoke tests per Spec.md Postman scenarios.
+Runs list-folders smoke tests per README.md verification scenarios.
 Requires the POC stack to be running and seed data loaded.
 
 Environment:

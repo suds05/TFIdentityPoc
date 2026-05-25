@@ -1,8 +1,12 @@
-# Background
+# TF Identity POC
+
+> Design, implementation contract, and verification for this repo. Contributors and coding agents should treat this document as the source of truth.
+
+## Background
 The goal of this project is to simulate a system that has several Region level Storage Tiers, and a global Global Tier. Teams are top-level entities managed by the Storage Tier. Teams contain folders.
 Global Tier has a mapping of user to accessible teams. Storage Tier relies on Global Tier to know which teams are accessible to which users. 
 
-# High level Requirements for the problem
+## High level Requirements for the problem
 
 * 3 services running locally (docker), one is the global tier and 2 are mimicking storage tier on 2 scale units
 * The global tier exposes a discover API that takes a user token (claims include user ID and email) and returns back the teams that user is part of
@@ -13,19 +17,19 @@ Global Tier has a mapping of user to accessible teams. Storage Tier relies on Gl
 ## Block Diagram
 ```mermaid
 graph TD
-    subgraph SG1
-        S1[Storage Tier1]-->Storage1DB[Storage1DB]
-    end
-    subgraph SG2
-        S2[Storage Tier2]-->Storage2DB[Storage2DB]
-    end
-    subgraph GG
-      G[Global Tier]-->GlobalDB[GlobalDB]
-    end
-    S1-->GG
-    S2-->GG
-    C[Client]-->S1
-    C-->S2
+    subgraph SG1
+        S1[Storage Tier1]-->Storage1DB[Storage1DB]
+    end
+    subgraph SG2
+        S2[Storage Tier2]-->Storage2DB[Storage2DB]
+    end
+    subgraph GG
+      G[Global Tier]-->GlobalDB[GlobalDB]
+    end
+    S1-->GG
+    S2-->GG
+    C[Client]-->S1
+    C-->S2
 ```
 ## Interaction Flow
 1. The Client goes to IDP and fetches a token. (For the POC, this is simulated as pre-signed JWT token.)
@@ -40,14 +44,14 @@ graph TD
 
 ## Implementation choices and Technical primitives
 
-### Service implementations:
+### Service implementation
 * We will implement in golang
 * We will expose HTTP REST APIs
 * **API contracts: OpenAPI 3.0 (Swagger)**.
     * REST + Postman is the stack; OpenAPI is the simplest way to describe request/response and import into Postman.
-    * Spec files in repo (no codegen required for v1):
-        * `api/global.openapi.yaml` — Discover
-        * `api/storage.openapi.yaml` — List folders (same contract on tier 1 and tier 2)
+    * OpenAPI files in repo (no codegen required for v1):
+        * [api/global.openapi.yaml](api/global.openapi.yaml) — Discover
+        * [api/storage.openapi.yaml](api/storage.openapi.yaml) — List folders (same contract on tier 1 and tier 2)
     * For this POC, implement handlers by hand in Go. Keep YAML in sync with code (consider codegen as next step).
 * We will implement the services as docker containers
 * There will be 2 storage tiers, launched with ID 1 and 2 as startup arguments.
@@ -61,8 +65,8 @@ graph TD
     * Global tier will be accessible from all storage tiers.
     * Storage tiers call global via `GLOBAL_TIER_URL` (Compose DNS, e.g. `http://global:8080`), not `localhost`.
 
-### HTTP API summary (see OpenAPI files for full schemas)
-
+### API Implementation
+See [api/global.openapi.yaml](api/global.openapi.yaml) and [api/storage.openapi.yaml](api/storage.openapi.yaml) for full schemas.
 All endpoints require `Authorization: Bearer <JWT>`.
 
 **Global tier** (`localhost:8080`)
@@ -83,12 +87,13 @@ All endpoints require `Authorization: Bearer <JWT>`.
 | | | 403 | User not in discover result for `teamId` |
 | | | 404 | User allowed but team not provisioned on this tier |
 
-### Storage implementation:
+### Database implementation
+* We will use MongoDB for the database.
 * **PoC default:** MongoDB runs in Docker Compose (`mongo:7` image, service name `mongo`, port `27017` published to the host for seed scripts).
 * One MongoDB instance hosts all logical databases (no Atlas or external cluster required for the POC).
 * **Connection string:** `MONGODB_URI` environment variable (e.g. `mongodb://mongo:27017` from app containers on the Compose network; `mongodb://localhost:27017` from the host when running mongosh scripts from `scripts/`).
-* `scripts/run_mongosh.sh` runs one or more mongosh `.js` files against the local Mongo instance (waits for Mongo, resolves host vs Docker `mongosh`).
-* `scripts/seed_test_data.js` seeds all databases idempotently (upsert); `scripts/verify_test_data.js` checks document counts. `run.sh` runs both via `scripts/run_mongosh.sh` after startup.
+* [scripts/run_mongosh.sh](scripts/run_mongosh.sh) runs one or more mongosh `.js` files against the local Mongo instance (waits for Mongo, resolves host vs Docker `mongosh`).
+* [scripts/seed_test_data.js](scripts/seed_test_data.js) seeds all databases idempotently (upsert); [scripts/verify_test_data.js](scripts/verify_test_data.js) checks document counts. [run.sh](run.sh) runs both via `scripts/run_mongosh.sh` after startup.
 * **GlobalDB** (MongoDB database `global`) — used by global tier; collections:
     * `user_team_memberships` — user to teams mapping
     * `team_storage_routing` — team to storage tier ID mapping
@@ -177,7 +182,7 @@ Sample data for collections:
     List folders: `findOne({ _id: teamId })` → return `folders` (or 404 if missing).
 
 
-### Authentication (JWT):
+### Authentication (JWT) Implementation
 
 * Authentication uses a JWT on every API call (`Authorization: Bearer <token>`).
 * **Global** and **Storage** tiers validate the token (shared `JWT_SECRET` for PoC).
@@ -197,7 +202,7 @@ For POC:
 * Example payload: `{ "sub": "usr_sudhakan", "email": "sudhakan@gmail.com", "org_id": "org_acme" }`.
 * Invalid or missing token → Unauthorized (`401`) error.
 
-### Verification
+## Verification and Testing
 Tool used for verification: curl (postman could also be used).
 JWT user: `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`.
 Test data: Populated from [scripts/seed_test_data.js](scripts/seed_test_data.js)
@@ -210,10 +215,10 @@ Test data: Populated from [scripts/seed_test_data.js](scripts/seed_test_data.js)
 | List folders (member, wrong tier) | Storage tier 1 `:8081` | `marketing` | 404 |
 | List folders (member, correct tier) | Storage tier 2 `:8082` | `marketing` | 200; folders for marketing |
 
-### How to Run.
-1. Run [./run.sh](run.sh) to start the services and curl to test the APIs.
-    * Tests for discover API are in [scripts/test_discover_api.sh](scripts/test_discover_api.sh)
-    * Tests for list folders API are in [scripts/test_list_folders.sh](scripts/test_list_folders.sh)
+## How to Run
+1. Run [./run.sh](run.sh) to start the services, load test data and run all tests.
+  * Tests for discover API are in [scripts/test_discover_api.sh](scripts/test_discover_api.sh)
+  * Tests for list folders API are in [scripts/test_list_folders.sh](scripts/test_list_folders.sh)
 
 2. Transcript from running [./run.sh](run.sh)
 ```log
