@@ -4,7 +4,7 @@ Global Tier has a mapping of user to accessible teams. Storage Tier relies on Gl
 
 # High level Requirements for the problem
 
-* 3 services running locally (docker), one is the global (or identity) tier and 2 are mimicking storage tier on 2 scale units
+* 3 services running locally (docker), one is the global tier and 2 are mimicking storage tier on 2 scale units
 * The global tier exposes a discover API that takes a user token (claims include user ID and email) and returns back the teams that user is part of
 * Storage tier exposes a list folders call that returns the list of folders in a team
 * You can decide which database to use and bootstrap it with some sample data. No need of elaborate auth, go with something quick and simple.
@@ -71,7 +71,7 @@ All endpoints require `Authorization: Bearer <JWT>`.
 |--------|------|---------|----------------|
 | `GET` | `/health` | 200 | Liveness |
 | `GET` | `/v1/discover` | 200 | `{ "teamIds": ["engineering", "marketing"] }` or `{ "teams": [{ "teamId", "storageTierId" }] }` |
-| | | 401 | Missing/invalid JWT, or user not in identity DB |
+| | | 401 | Missing/invalid JWT, or user not in GlobalDB |
 
 **Storage tier** (`localhost:8081` / `:8082`)
 
@@ -89,20 +89,20 @@ All endpoints require `Authorization: Bearer <JWT>`.
 * **Connection string:** `MONGODB_URI` environment variable (e.g. `mongodb://mongo:27017` from app containers on the Compose network; `mongodb://localhost:27017` from the host when running mongosh scripts from `scripts/`).
 * `scripts/run_mongosh.sh` runs one or more mongosh `.js` files against the local Mongo instance (waits for Mongo, resolves host vs Docker `mongosh`).
 * `scripts/seed_test_data.js` seeds all databases idempotently (upsert); `scripts/verify_test_data.js` checks document counts. `run.sh` runs both via `scripts/run_mongosh.sh` after startup.
-* **Identity database** (`identity`) — used by global tier; collections:
+* **GlobalDB** (MongoDB database `global`) — used by global tier; collections:
     * `user_team_memberships` — user to teams mapping
     * `team_storage_routing` — team to storage tier ID mapping
-* **Storage tier 1 database** (`storage_tier_1`) — used by storage tier 1; collection:
+* **Storage1DB** (MongoDB database `storage_tier_1`) — used by storage tier 1; collection:
     * `teams` — one document per team on that tier; embedded `folders` array
-* **Storage tier 2 database** (`storage_tier_2`) — used by storage tier 2; collection:
+* **Storage2DB** (MongoDB database `storage_tier_2`) — used by storage tier 2; collection:
     * `teams` — one document per team on that tier; embedded `folders` array
-* Global tier reads `identity`; each storage tier reads its own `storage_tier_N` database (selected via env, e.g. `MONGODB_DATABASE=storage_tier_1` and `--tier-id=1`).
+* Global tier reads `global` (GlobalDB); each storage tier reads its own `storage_tier_N` database (selected via env, e.g. `MONGODB_DATABASE=storage_tier_1` and `--tier-id=1`).
 
 Team IDs are lowercase strings and must match across `team_storage_routing` and storage `teams._id`.
 User IDs are stable strings; `user_team_memberships._id` must match the user ID claim in the JWT (`sub`). Email is stored for reference only, not used for membership lookup.
 
 Sample data for collections:
-* Identity DB `identity` (global tier)
+* GlobalDB `global` (global tier)
   1. `user_team_memberships` — one document per user
 
     ```json
@@ -127,7 +127,7 @@ Sample data for collections:
 
     Discover may return `teamIds` only, or `teams: [{ teamId, storageTierId }]` by joining memberships with routing.
 
-* Storage DB `storage_tier_1` — collection `teams`
+* Storage1DB `storage_tier_1` — collection `teams`
 
     ```json
     {
@@ -155,7 +155,7 @@ Sample data for collections:
 
     List folders: `findOne({ _id: teamId })` → return `folders` (or 404 if missing).
 
-* Storage DB `storage_tier_2` — collection `teams`
+* Storage2DB `storage_tier_2` — collection `teams`
 
     ```json
     {
@@ -177,7 +177,7 @@ Sample data for collections:
     List folders: `findOne({ _id: teamId })` → return `folders` (or 404 if missing).
 
 
-### Identity and Auth Token:
+### Authentication (JWT):
 
 * Authentication uses a JWT on every API call (`Authorization: Bearer <token>`).
 * **Global** and **Storage** tiers validate the token (shared `JWT_SECRET` for PoC).
@@ -195,7 +195,7 @@ For POC:
 * Hand-crafted JWT in Postman.
 * HMAC (`HS256`) validation with `JWT_SECRET` from `.env` (same secret on all services).
 * Example payload: `{ "sub": "usr_sudhakan", "email": "sudhakan@gmail.com", "org_id": "org_acme" }`.
-* Invalid or missing token → Forbidden error.
+* Invalid or missing token → Unauthorized (`401`) error.
 
 ### Postman test scenarios (JWT `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`):
 

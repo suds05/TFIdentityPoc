@@ -1,4 +1,4 @@
-package identity
+package globaldb
 
 import (
 	"context"
@@ -18,8 +18,8 @@ var ErrUserNotFound = errors.New("user not found")
 
 // TeamRoute maps a team to its storage tier.
 type TeamRoute struct {
-	TeamID         string `json:"teamId"`
-	StorageTierID  int    `json:"storageTierId"`
+	TeamID        string `json:"teamId"`
+	StorageTierID int    `json:"storageTierId"`
 }
 
 // DiscoverResult is the data returned by the discover API.
@@ -38,13 +38,13 @@ type routingDoc struct {
 	StorageTierID int    `bson:"storageTierId"`
 }
 
-// Store reads identity data from MongoDB.
+// Store reads GlobalDB data from MongoDB.
 type Store struct {
 	memberships *mongo.Collection
 	routing     *mongo.Collection
 }
 
-// NewStore creates a store backed by the identity database.
+// NewStore creates a store backed by the GlobalDB MongoDB database.
 func NewStore(db *mongo.Database) *Store {
 	return &Store{
 		memberships: db.Collection(collMemberships),
@@ -67,6 +67,10 @@ func (s *Store) Discover(ctx context.Context, userID string) (DiscoverResult, er
 		teamIDs = []string{}
 	}
 	teams := make([]TeamRoute, 0, len(teamIDs))
+
+	// TODO:sudhakar - we are returning the routing information along with team memberships for the user.
+	// This should ideally be split to a seperate API. The Storage Tier will only require user's team memberships.
+	// Some edge component doing routing may require the routing information. So seperating is better.
 	for _, teamID := range teamIDs {
 		var route routingDoc
 		err := s.routing.FindOne(ctx, bson.M{"_id": teamID}).Decode(&route)

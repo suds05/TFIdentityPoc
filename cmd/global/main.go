@@ -14,13 +14,13 @@ import (
 
 	"tfidentitypoc/internal/config"
 	"tfidentitypoc/internal/global"
-	"tfidentitypoc/internal/identity"
+	"tfidentitypoc/internal/globaldb"
 )
 
 func main() {
 	addr := config.FromEnv("LISTEN_ADDR", ":8080")
 	mongoURI := config.FromEnv("MONGODB_URI", "mongodb://mongo:27017")
-	dbName := config.FromEnv("MONGODB_DATABASE", "identity")
+	dbName := config.FromEnv("MONGODB_DATABASE", "global")
 	jwtSecret := config.FromEnv("JWT_SECRET", "")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET is required")
@@ -39,7 +39,7 @@ func main() {
 		_ = client.Disconnect(dctx)
 	}()
 
-	store := identity.NewStore(client.Database(dbName))
+	store := globaldb.NewStore(client.Database(dbName))
 	srv := global.NewServer(jwtSecret, store)
 
 	httpSrv := &http.Server{Addr: addr, Handler: srv.Handler()}

@@ -1,4 +1,4 @@
-// Idempotent seed data for the TF Identity POC (run via mongosh).
+// Idempotent seed data for the TF Global POC (run via mongosh).
 function upsertOne(dbName, collection, filter, doc) {
   const result = db
     .getSiblingDB(dbName)
@@ -9,8 +9,8 @@ function upsertOne(dbName, collection, filter, doc) {
   }
 }
 
-// Identity DB
-upsertOne("identity", "user_team_memberships", { _id: "usr_sudhakan" }, {
+// GlobalDB
+upsertOne("global", "user_team_memberships", { _id: "usr_sudhakan" }, {
   _id: "usr_sudhakan",
   email: "sudhakan@gmail.com",
   teamIds: ["engineering", "marketing"],
@@ -24,7 +24,7 @@ const routing = [
   { _id: "sales", storageTierId: 2 },
 ];
 for (const doc of routing) {
-  upsertOne("identity", "team_storage_routing", { _id: doc._id }, doc);
+  upsertOne("global", "team_storage_routing", { _id: doc._id }, doc);
 }
 
 // Storage tier 1
@@ -76,4 +76,4 @@ for (const doc of tier2Teams) {
   upsertOne("storage_tier_2", "teams", { _id: doc._id }, doc);
 }
 
-print("seed complete: identity (2 collections), storage_tier_1, storage_tier_2");
+print("seed complete: global (2 collections), storage_tier_1, storage_tier_2");

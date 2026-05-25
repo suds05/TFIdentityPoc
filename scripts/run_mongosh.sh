@@ -26,7 +26,7 @@ Environment:
 
 Examples:
   $(basename "$0") seed_test_data.js
-  $(basename "$0") --eval 'db.getSiblingDB("identity").stats()'
+  $(basename "$0") --eval 'db.getSiblingDB("global").stats()'
 
 Available scripts:
 EOF

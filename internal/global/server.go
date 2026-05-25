@@ -7,18 +7,18 @@ import (
 
 	"tfidentitypoc/internal/auth"
 	"tfidentitypoc/internal/httputil"
-	"tfidentitypoc/internal/identity"
+	"tfidentitypoc/internal/globaldb"
 )
 
-// Server is the HTTP server for the global (identity) tier.
+// Server is the HTTP server for the global tier.
 type Server struct {
 	mux       *http.ServeMux
 	jwtSecret string
-	store     *identity.Store
+	store     *globaldb.Store
 }
 
 // NewServer builds a global tier server.
-func NewServer(jwtSecret string, store *identity.Store) *Server {
+func NewServer(jwtSecret string, store *globaldb.Store) *Server {
 	s := &Server{
 		mux:       http.NewServeMux(),
 		jwtSecret: jwtSecret,
@@ -54,7 +54,7 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	// Read discovery data from DB for this userid.
 	result, err := s.store.Discover(r.Context(), claims.UserID)
 	if err != nil {
-		if errors.Is(err, identity.ErrUserNotFound) {
+		if errors.Is(err, globaldb.ErrUserNotFound) {
 			httputil.Unauthorized(w)
 			return
 		}

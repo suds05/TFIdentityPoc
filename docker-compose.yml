@@ -23,7 +23,7 @@ services:
     environment:
       LISTEN_ADDR: ":8080"
       MONGODB_URI: mongodb://mongo:27017
-      MONGODB_DATABASE: identity
+      MONGODB_DATABASE: global
       JWT_SECRET: ${JWT_SECRET:-poc-dev-secret}
     depends_on:
       mongo:
