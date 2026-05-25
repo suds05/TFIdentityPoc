@@ -8,7 +8,7 @@ Global Tier has a mapping of user to accessible teams. Storage Tier relies on Gl
 * The global tier exposes a discover API that takes a user token (claims include user ID and email) and returns back the teams that user is part of
 * Storage tier exposes a list folders call that returns the list of folders in a team
 * You can decide which database to use and bootstrap it with some sample data. No need of elaborate auth, go with something quick and simple.
-*Once the setup is running, thru postman, run this calls – discover, list projects in a team user is a member of, try to list projects in a team user is not a member of (should fail)
+*Once the setup is running, thru postman, run this calls – discover, list folders in a team user is a member of, try to list folders in a team user is not a member of (should fail)
 
 ## Block Diagram
 ```mermaid
@@ -27,6 +27,7 @@ graph TD
 1. The Client goes to IDP and fetches a token. (For the POC, this is simulated as pre-signed JWT token.)
 2. Client calls Storage Tier1's List Folders API to get the list of folders for a Team1. 
 3. Storage Tier1 calls Global Tier's Discover API.
+    * For the POC, the Storage Tier will proxy caller's token to the Global Tier.
 4. If Team1 is not in discovery results, the Storage Tier returns a 403 Forbidden error.
 5. If Team1 is in discovery results, but Team1 is missing in Storage Tier1's Team Database, the Storage Tier returns a 404 Not Found error.
 6. If Team1 is in discovery results and Team1 is present in Storage Tier1's Team Database, the Storage Tier returns the list of folders for the team found in the database.
