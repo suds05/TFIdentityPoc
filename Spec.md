@@ -35,7 +35,13 @@ graph TD
 
 ### Service implementations:
 * We will implement in golang
-* We will expose HTTP REST APIs 
+* We will expose HTTP REST APIs
+* **API contracts: OpenAPI 3.0 (Swagger)**.
+    * REST + Postman is the stack; OpenAPI is the simplest way to describe request/response and import into Postman.
+    * Spec files in repo (no codegen required for v1):
+        * `api/global.openapi.yaml` — Discover
+        * `api/storage.openapi.yaml` — List folders (same contract on tier 1 and tier 2)
+    * For this POC, implement handlers by hand in Go. Keep YAML in sync with code (consider codegen as next step).
 * We will implement the services as docker containers
 * There will be 2 storage tiers, launched with ID 1 and 2 as startup arguments.
     * Same storage-tier image for both instances.
@@ -46,6 +52,29 @@ graph TD
 * Network and Communication:
     * All services will be accessible from localhost.
     * Global tier will be accessible from all storage tiers.
+    * Storage tiers call global via `GLOBAL_TIER_URL` (Compose DNS, e.g. `http://global:8080`), not `localhost`.
+
+### HTTP API summary (see OpenAPI files for full schemas)
+
+All endpoints require `Authorization: Bearer <JWT>`.
+
+**Global tier** (`localhost:8080`)
+
+| Method | Path | Success | Body / notes |
+|--------|------|---------|----------------|
+| `GET` | `/health` | 200 | Liveness |
+| `GET` | `/v1/discover` | 200 | `{ "teamIds": ["engineering", "marketing"] }` or `{ "teams": [{ "teamId", "storageTierId" }] }` |
+| | | 401 | Missing/invalid JWT |
+
+**Storage tier** (`localhost:8081` / `:8082`)
+
+| Method | Path | Success | Body / notes |
+|--------|------|---------|----------------|
+| `GET` | `/health` | 200 | Liveness |
+| `GET` | `/v1/teams/{teamId}/folders` | 200 | `{ "teamId": "...", "folders": [{ "folderId", "name" }] }` |
+| | | 401 | Missing/invalid JWT |
+| | | 403 | User not in discover result for `teamId` |
+| | | 404 | User allowed but team not provisioned on this tier |
 
 ### Storage implementation:
 * We will use MongoDB Atlas cluster as the storage for the project.
