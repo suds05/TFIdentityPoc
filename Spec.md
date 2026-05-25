@@ -48,7 +48,7 @@ graph TD
     * Same storage-tier image for both instances.
     * Compose differs only by: command / args (--tier-id=1 vs 2), ports, and env (e.g. DB name or connection targeting tier-1 vs tier-2 data).
 * There will be one global tier.
-* All the services will be launched with docker compose.
+* All the services will be launched with docker compose (global tier, two storage tiers, and a local MongoDB container).
 * Services will be available at localhost:8080 for global tier, localhost:8081 for storage tier 1, and localhost:8082 for storage tier 2.
 * Network and Communication:
     * All services will be accessible from localhost.
@@ -78,23 +78,24 @@ All endpoints require `Authorization: Bearer <JWT>`.
 | | | 404 | User allowed but team not provisioned on this tier |
 
 ### Storage implementation:
-* We will use MongoDB Atlas cluster as the storage for the project.
-* We can expect Mongo Atlas connection string to be saved as an environment variable. 
-    * There will be a .env file in the root of the project that will contain the environment variables.
-* We will have a load_test_data.sh script that will load the test data into the database.
-* Identity database will be a MongoDB Atlas database with collections for:
-    * users to teams mapping (user_team_memberships collection)
-    * teams to storage tier ID mapping (team_storage_routing collection)
-* Storage tier 1 database (`storage_tier_1`) with collection:
+* **PoC default:** MongoDB runs in Docker Compose (`mongo:7` image, service name `mongo`, port `27017` published to the host for seed scripts).
+* One MongoDB instance hosts all logical databases (no Atlas or external cluster required for the POC).
+* **Connection string:** `MONGODB_URI` environment variable (e.g. `mongodb://mongo:27017` from app containers on the Compose network; `mongodb://localhost:27017` from the host when running `load_test_data.sh`).
+* `load_test_data.sh` seeds all databases idempotently (upsert) against the local Mongo instance.
+* **Identity database** (`identity`) — used by global tier; collections:
+    * `user_team_memberships` — user to teams mapping
+    * `team_storage_routing` — team to storage tier ID mapping
+* **Storage tier 1 database** (`storage_tier_1`) — used by storage tier 1; collection:
     * `teams` — one document per team on that tier; embedded `folders` array
-* Storage tier 2 database (`storage_tier_2`) with collection:
+* **Storage tier 2 database** (`storage_tier_2`) — used by storage tier 2; collection:
     * `teams` — one document per team on that tier; embedded `folders` array
+* Global tier reads `identity`; each storage tier reads its own `storage_tier_N` database (selected via env, e.g. `MONGODB_DATABASE=storage_tier_1` and `--tier-id=1`).
 
 Team IDs are lowercase strings and must match across `team_storage_routing` and storage `teams._id`.
 User IDs are stable strings; `user_team_memberships._id` must match the user ID claim in the JWT (`sub`). Email is stored for reference only, not used for membership lookup.
 
 Sample data for collections:
-* Identity DB (global tier)
+* Identity DB `identity` (global tier)
   1. `user_team_memberships` — one document per user
 
     ```json
