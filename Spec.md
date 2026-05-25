@@ -5,7 +5,7 @@ Global Tier has a mapping of user to accessible teams. Storage Tier relies on Gl
 # High level Requirements for the problem
 
 * 3 services running locally (docker), one is the global (or identity) tier and 2 are mimicking storage tier on 2 scale units
-* The global tier exposes a discover API that takes a user token (claim includes email) request and returns back the teams that user is part of
+* The global tier exposes a discover API that takes a user token (claims include user ID and email) and returns back the teams that user is part of
 * Storage tier exposes a list folders call that returns the list of folders in a team
 * You can decide which database to use and bootstrap it with some sample data. No need of elaborate auth, go with something quick and simple.
 *Once the setup is running, thru postman, run this calls – discover, list projects in a team user is a member of, try to list projects in a team user is not a member of (should fail)
@@ -60,7 +60,8 @@ graph TD
 * Storage tier 2 database (`storage_tier_2`) with collection:
     * `teams` — one document per team on that tier; embedded `folders` array
 
-Team IDs are lowercase strings and must match across `user_team_memberships`, `team_storage_routing`, and storage `teams._id`.
+Team IDs are lowercase strings and must match across `team_storage_routing` and storage `teams._id`.
+User IDs are stable strings; `user_team_memberships._id` must match the user ID claim in the JWT (`sub`). Email is stored for reference only, not used for membership lookup.
 
 Sample data for collections:
 * Identity DB (global tier)
@@ -68,12 +69,13 @@ Sample data for collections:
 
     ```json
     {
-      "_id": "sudhakan@gmail.com",
+      "_id": "usr_sudhakan",
+      "email": "sudhakan@gmail.com",
       "teamIds": ["engineering", "marketing"]
     }
     ```
 
-    Discover: `findOne({ _id: email })` → return `teamIds`.
+    Discover: read user ID from JWT → `findOne({ _id: userId })` → return `teamIds`.
 
   2. `team_storage_routing` — one document per team
 
@@ -138,16 +140,26 @@ Sample data for collections:
 
 
 ### Identity and Auth Token:
-* We will use a JWT token for authentication.
-* The Service Tier will validate the token and extract the user email from the token.
-* For POC:
-    * We will hand-craft the token in the client. 
-    * Token validation will be based on a HMAC signature. (With a real identity provider, we would use a public key to validate the token.)
-    * Token will contain user email as the subject.
-    * Token will contain a userID as a claim.
-    * token will contain tenantID or organizationID as a claim.
 
-### Postman test scenarios (JWT claim email: `sudhakan@gmail.com`):
+* Authentication uses a JWT on every API call (`Authorization: Bearer <token>`).
+* **Global** and **Storage** tiers validate the token (shared `JWT_SECRET` for PoC).
+* **Membership lookup uses user ID only** — not email. Email is carried in the token and may be stored on the membership document but is not the database key.
+
+JWT claims (PoC and production-shaped):
+
+| Claim | Purpose |
+|-------|---------|
+| `sub` | **Canonical user ID** — must match `user_team_memberships._id` (e.g. `usr_sudhakan`) |
+| `email` | User email (e.g. `sudhakan@gmail.com`) — logging/display; not used for DB lookup |
+| `org_id` | Tenant/organization ID (reserved for multi-tenant; optional in PoC) |
+
+For POC:
+* Hand-crafted JWT in Postman.
+* HMAC (`HS256`) validation with `JWT_SECRET` from `.env` (same secret on all services).
+* Example payload: `{ "sub": "usr_sudhakan", "email": "sudhakan@gmail.com", "org_id": "org_acme" }`.
+* Invalid or missing token → Forbidden error.
+
+### Postman test scenarios (JWT `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`):
 
 | Scenario | Service | Team ID | Expected |
 |----------|---------|---------|----------|
