@@ -197,7 +197,10 @@ For POC:
 * Example payload: `{ "sub": "usr_sudhakan", "email": "sudhakan@gmail.com", "org_id": "org_acme" }`.
 * Invalid or missing token → Unauthorized (`401`) error.
 
-### Curl/Postman test scenarios (JWT `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`):
+### Verification
+Tool used for verification: curl (postman could also be used).
+JWT user: `sub`: `usr_sudhakan`, `email`: `sudhakan@gmail.com`.
+Test data: Populated from [scripts/seed_test_data.js](scripts/seed_test_data.js)
 
 | Scenario | Service | Team ID | Expected |
 |----------|---------|---------|----------|
@@ -207,7 +210,12 @@ For POC:
 | List folders (member, wrong tier) | Storage tier 1 `:8081` | `marketing` | 404 |
 | List folders (member, correct tier) | Storage tier 2 `:8082` | `marketing` | 200; folders for marketing |
 
-### Transcript from run.sh
+### How to Run.
+1. Run [./run.sh](run.sh) to start the services and curl to test the APIs.
+    * Tests for discover API are in [scripts/test_discover_api.sh](scripts/test_discover_api.sh)
+    * Tests for list folders API are in [scripts/test_list_folders.sh](scripts/test_list_folders.sh)
+
+2. Transcript from running [./run.sh](run.sh)
 ```log
  Building 3/3
  ✔ global          Built                                                                                                            0.0s 
