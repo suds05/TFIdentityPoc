@@ -17,11 +17,41 @@ paths:
       responses:
         "200":
           description: Teams the user can access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoverResponse"
         "401":
-          description: Missing or invalid JWT
+          description: Missing or invalid JWT, or user not found in identity DB
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    DiscoverResponse:
+      type: object
+      required:
+        - teamIds
+        - teams
+      properties:
+        teamIds:
+          type: array
+          items:
+            type: string
+          example: ["engineering", "marketing"]
+        teams:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRoute"
+    TeamRoute:
+      type: object
+      required:
+        - teamId
+        - storageTierId
+      properties:
+        teamId:
+          type: string
+        storageTierId:
+          type: integer

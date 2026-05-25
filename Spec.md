@@ -71,7 +71,7 @@ All endpoints require `Authorization: Bearer <JWT>`.
 |--------|------|---------|----------------|
 | `GET` | `/health` | 200 | Liveness |
 | `GET` | `/v1/discover` | 200 | `{ "teamIds": ["engineering", "marketing"] }` or `{ "teams": [{ "teamId", "storageTierId" }] }` |
-| | | 401 | Missing/invalid JWT |
+| | | 401 | Missing/invalid JWT, or user not in identity DB |
 
 **Storage tier** (`localhost:8081` / `:8082`)
 
