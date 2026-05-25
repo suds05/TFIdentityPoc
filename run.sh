@@ -27,42 +27,8 @@ wait_for_url() {
   die "timed out waiting for $name at $url"
 }
 
-# Test the discover API.
-test_discover_api() {
-  local secret="${JWT_SECRET:-poc-dev-secret}"
-  local status body token
-
-  log "discover API smoke test"
-
-  status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/v1/discover")
-  if [[ "$status" != "401" ]]; then
-    die "discover without auth: expected 401, got ${status}"
-  fi
-  printf '  discover (no auth):     401 OK\n'
-
-  token=$(go run "${ROOT_DIR}/scripts/mint_jwt.go" "$secret")
-  body=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer ${token}" "http://localhost:8080/v1/discover")
-  status=$(tail -n1 <<<"$body")
-  body=$(sed '$d' <<<"$body")
-  if [[ "$status" != "200" ]]; then
-    die "discover with token: expected 200, got ${status}; body: ${body}"
-  fi
-  if [[ "$body" != *engineering* ]] || [[ "$body" != *marketing* ]]; then
-    die "discover response missing expected teams: ${body}"
-  fi
-  printf '  discover (usr_sudhakan): 200 OK  %s\n' "$body"
-
-  token=$(go run "${ROOT_DIR}/scripts/mint_jwt.go" "$secret" usr_unknown)
-  status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${token}" "http://localhost:8080/v1/discover")
-  if [[ "$status" != "401" ]]; then
-    die "discover (unknown user): expected 401, got ${status}"
-  fi
-  printf '  discover (usr_unknown): 401 OK\n'
-}
-
 require_cmd docker
 require_cmd curl
-require_cmd go
 
 if ! docker compose version >/dev/null 2>&1; then
   die "docker compose is required (Docker Compose V2 plugin)"
@@ -113,12 +79,18 @@ Services:
   Storage tier 1:  http://localhost:8081
   Storage tier 2:  http://localhost:8082
   MongoDB:         mongodb://localhost:27017
+
+Useful commands:
+  ./scripts/test_discover_api.sh
+  ./scripts/run_mongosh.sh seed_test_data.js verify_test_data.js
+  docker compose logs -f
+  docker compose down
+  make test-health
 EOF
 log "stack is up"
 echo
 
-# Test the discover API.
-test_discover_api
+"${ROOT_DIR}/scripts/test_discover_api.sh"
 echo
 
 log "All good!"
