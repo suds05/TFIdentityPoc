@@ -13,24 +13,30 @@ Global Tier has a mapping of user to accessible teams. Storage Tier relies on Gl
 ## Block Diagram
 ```mermaid
 graph TD
-    G[Global Tier]-->UDB[User Database]
-    S1[Storage Tier1]-->G
-    S2[Storage Tier2]-->G
-    S1[Storage Tier1]-->TDB1[Team Database1]
-    S2[Storage Tier2]-->TDB2[Team Database2]
-    C[Client]--> IDP[Identity Provider]
-    C-->S1
-    C-->S2
-    C-->G
+    subgraph SG1
+        S1[Storage Tier1]-->Storage1DB[Storage1DB]
+    end
+    subgraph SG2
+        S2[Storage Tier2]-->Storage2DB[Storage2DB]
+    end
+    subgraph GG
+      G[Global Tier]-->GlobalDB[GlobalDB]
+    end
+    S1-->GG
+    S2-->GG
+    C[Client]-->S1
+    C-->S2
 ```
 ## Interaction Flow
 1. The Client goes to IDP and fetches a token. (For the POC, this is simulated as pre-signed JWT token.)
 2. Client calls Storage Tier1's List Folders API to get the list of folders for a Team1. 
-3. Storage Tier1 calls Global Tier's Discover API.
-    * For the POC, the Storage Tier will proxy caller's token to the Global Tier.
-4. If Team1 is not in discovery results, the Storage Tier returns a 403 Forbidden error.
-5. If Team1 is in discovery results, but Team1 is missing in Storage Tier1's Team Database, the Storage Tier returns a 404 Not Found error.
-6. If Team1 is in discovery results and Team1 is present in Storage Tier1's Team Database, the Storage Tier returns the list of folders for the team found in the database.
+3. Storage Tier1 calls Global Tier's Discover API for the user.
+    * Storage Tier will proxy caller's token to the Global Tier.
+    * Global Tier will return teams that the user (subject of the token) is a member of.
+4. If Global Tier finds the token invalid or user non-existent, it returns a 401 Unauthorized error. Storage Tier will propagate the error to the client.
+5. If Team1 is not in the discover results, the Storage Tier returns a 403 Forbidden error.
+6. If Team1 is in the discover results, but Team1 is missing in Storage Tier1's Storage1DB, the Storage Tier returns a 404 Not Found error.
+7. If Team1 is in the discover results and Team1 is present in Storage Tier1's Storage1DB, the Storage Tier returns the list of folders for the team found in the database.
 
 ## Implementation choices and Technical primitives
 
