@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
-# Bring up the POC stack (mongo, global tier, two storage tiers) and verify it.
+################################################################
+# 
+# Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License")
+# 
+# The 'Do everything' script.
+# 1. Builds and starts the POC Docker Compose stack.
+# 2. Seeds MongoDB with test data.
+# 3. Runs API smoke tests for the discover and list folders APIs.
+#
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

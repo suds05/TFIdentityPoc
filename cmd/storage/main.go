@@ -1,3 +1,9 @@
+// ////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// Entry point for a Storage Tier instance (tier 1 or 2);
 package main
 
 import (

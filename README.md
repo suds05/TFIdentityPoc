@@ -1,3 +1,10 @@
+<!--
+Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+Licensed under the Apache License, Version 2.0 (the "License")
+
+Design, implementation contract, and verification for the TF Identity POC.
+-->
+
 # TF Identity POC
 
 > Design, implementation contract, and verification for this repo. Contributors and coding agents should treat this document as the source of truth.

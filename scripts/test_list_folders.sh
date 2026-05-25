@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Smoke test GET /v1/teams/{teamId}/folders (stack must already be up).
+# //////////////////////////////////////////////////////////
+# //
+# // Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+# // Licensed under the Apache License, Version 2.0 (the "License")
+# //
+# // Smoke tests for GET /v1/teams/{teamId}/folders per README verification scenarios.
+# //
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

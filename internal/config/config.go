@@ -1,3 +1,10 @@
+//////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// Environment variable helpers with defaults for service configuration.
+//
 package config
 
 import "os"

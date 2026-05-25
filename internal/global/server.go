@@ -1,3 +1,10 @@
+//////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// HTTP server for the Global tier: health check and Discover API handlers.
+//
 package global
 
 import (

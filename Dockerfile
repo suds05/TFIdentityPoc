@@ -1,5 +1,11 @@
 # syntax=docker/dockerfile:1
-
+################################################################
+# 
+# Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License")
+# 
+# Multi-stage Docker build for global or storage tier Go services.
+#
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

@@ -1,4 +1,11 @@
-// Idempotent seed data for the TF Global POC (run via mongosh).
+// //////////////////////////////////////////////////////////
+// //
+// // Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// // Licensed under the Apache License, Version 2.0 (the "License")
+// //
+// // Idempotent mongosh seed for GlobalDB and both storage tier databases.
+// //
+
 function upsertOne(dbName, collection, filter, doc) {
   const result = db
     .getSiblingDB(dbName)

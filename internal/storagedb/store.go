@@ -1,3 +1,10 @@
+// ////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// Database Layer to read StorageDB from MongoDB collection.
+// This is used by the Storage Tier to read the StorageDB.
 package storagedb
 
 import (

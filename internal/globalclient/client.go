@@ -1,3 +1,10 @@
+// ////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// A Client class for the Global Tier service.
+// This is used by the Storage Tier to call the Global Tier's Discover API.
 package globalclient
 
 import (

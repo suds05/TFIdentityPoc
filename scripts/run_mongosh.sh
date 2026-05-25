@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Run one or more mongosh scripts against the POC MongoDB instance.
+# //////////////////////////////////////////////////////////
+# //
+# // Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+# // Licensed under the Apache License, Version 2.0 (the "License")
+# //
+# // Runs mongosh scripts against local or Docker MongoDB (seed, verify, etc.).
+# //
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

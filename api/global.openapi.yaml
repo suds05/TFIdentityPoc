@@ -1,3 +1,11 @@
+# //////////////////////////////////////////////////////////
+# //
+# // Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+# // Licensed under the Apache License, Version 2.0 (the "License")
+# //
+# // OpenAPI 3 contract for the Global tier (health and Discover endpoints).
+# //
+
 openapi: 3.0.3
 info:
   title: Global Tier API

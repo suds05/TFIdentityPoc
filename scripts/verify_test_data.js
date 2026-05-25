@@ -1,4 +1,11 @@
-// Verify POC seed data document counts.
+// //////////////////////////////////////////////////////////
+// //
+// // Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// // Licensed under the Apache License, Version 2.0 (the "License")
+// //
+// // Verifies MongoDB document counts match expected seed data for the POC.
+// //
+
 const expected = {
   global_user_team_memberships: 1,
   global_team_storage_routing: 5,

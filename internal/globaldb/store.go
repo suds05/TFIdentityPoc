@@ -1,3 +1,10 @@
+// ////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// Database Layer to read GlobalDB from MongoDB collections.
+// This is used by the Global Tier to read the GlobalDB.
 package globaldb
 
 import (
@@ -10,7 +17,7 @@ import (
 
 const (
 	collMemberships = "user_team_memberships"
-	collRouting       = "team_storage_routing"
+	collRouting     = "team_storage_routing"
 )
 
 // ErrUserNotFound is returned when no membership document exists for the user ID.

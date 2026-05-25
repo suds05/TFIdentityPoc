@@ -1,7 +1,13 @@
 //go:build ignore
 
-// mint_jwt prints a signed POC JWT for curl/Postman (HS256).
+//////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// CLI helper to mint signed POC JWTs for curl, Postman, and smoke test scripts.
 // Usage: go run scripts/mint_jwt.go [secret] [sub]
+//
 package main
 
 import (

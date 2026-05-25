@@ -1,3 +1,10 @@
+//////////////////////////////////////////////////////////////
+//
+// Copyright 2026 Sudhakar Narayanamurthy. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (the "License")
+//
+// Shared JSON HTTP response helpers for consistent API error and success bodies.
+//
 package httputil
 
 import (
