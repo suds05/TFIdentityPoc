@@ -1,0 +1,95 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  global:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: global
+    ports:
+      - "8080:8080"
+    environment:
+      LISTEN_ADDR: ":8080"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: identity
+      JWT_SECRET: ${JWT_SECRET:-poc-dev-secret}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  storage-tier-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: storage
+    command: ["--tier-id=1"]
+    ports:
+      - "8081:8080"
+    environment:
+      LISTEN_ADDR: ":8080"
+      TIER_ID: "1"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: storage_tier_1
+      GLOBAL_TIER_URL: http://global:8080
+      JWT_SECRET: ${JWT_SECRET:-poc-dev-secret}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      global:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  storage-tier-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: storage
+    command: ["--tier-id=2"]
+    ports:
+      - "8082:8080"
+    environment:
+      LISTEN_ADDR: ":8080"
+      TIER_ID: "2"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: storage_tier_2
+      GLOBAL_TIER_URL: http://global:8080
+      JWT_SECRET: ${JWT_SECRET:-poc-dev-secret}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      global:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  mongo_data:

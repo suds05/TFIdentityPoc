@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Bring up the POC stack (mongo, global tier, two storage tiers) and verify it.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+log() { printf '==> %s\n' "$*"; }
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "'$1' is required but not installed"
+}
+
+wait_for_url() {
+  local url=$1
+  local name=$2
+  local attempts=${3:-60}
+  local i=1
+  while (( i <= attempts )); do
+    if curl -sf "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    (( i++ )) || true
+  done
+  die "timed out waiting for $name at $url"
+}
+
+require_cmd docker
+require_cmd curl
+
+if ! docker compose version >/dev/null 2>&1; then
+  die "docker compose is required (Docker Compose V2 plugin)"
+fi
+
+if [[ ! -f .env ]]; then
+  log "creating .env from .env.example"
+  cp .env.example .env
+fi
+
+# shellcheck disable=SC1091
+set -a
+source .env
+set +a
+
+log "building images"
+docker compose build
+
+log "starting services"
+if docker compose up -d --wait 2>/dev/null; then
+  :
+else
+  # Older compose without --wait: start then poll health endpoints
+  docker compose up -d
+  wait_for_url "http://localhost:8080/health" "global tier"
+  wait_for_url "http://localhost:8081/health" "storage tier 1"
+  wait_for_url "http://localhost:8082/health" "storage tier 2"
+fi
+
+if [[ -x "${ROOT_DIR}/load_test_data.sh" ]]; then
+  log "seeding test data"
+  "${ROOT_DIR}/load_test_data.sh"
+elif [[ -x "${ROOT_DIR}/scripts/load_test_data.sh" ]]; then
+  log "seeding test data"
+  "${ROOT_DIR}/scripts/load_test_data.sh"
+fi
+
+log "health checks"
+printf '  global:          '
+curl -sf "http://localhost:8080/health"
+echo
+printf '  storage tier 1:  '
+curl -sf "http://localhost:8081/health"
+echo
+printf '  storage tier 2:  '
+curl -sf "http://localhost:8082/health"
+echo
+
+log "stack is up"
+cat <<EOF
+
+Services:
+  Global tier:     http://localhost:8080
+  Storage tier 1:  http://localhost:8081
+  Storage tier 2:  http://localhost:8082
+  MongoDB:         mongodb://localhost:27017
+
+Useful commands:
+  docker compose logs -f
+  docker compose down
+  make test-health
+
+EOF

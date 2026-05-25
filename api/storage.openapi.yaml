@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: Storage Tier API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      responses:
+        "200":
+          description: Service is alive
+  /v1/teams/{teamId}/folders:
+    get:
+      summary: List folders in a team
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Folder list for the team
+        "401":
+          description: Missing or invalid JWT
+        "403":
+          description: User not authorized for this team
+        "404":
+          description: Team not provisioned on this storage tier
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

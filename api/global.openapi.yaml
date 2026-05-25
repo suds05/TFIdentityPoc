@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: Global Tier API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      responses:
+        "200":
+          description: Service is alive
+  /v1/discover:
+    get:
+      summary: Discover teams accessible to the caller
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Teams the user can access
+        "401":
+          description: Missing or invalid JWT
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
