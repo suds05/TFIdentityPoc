@@ -6,7 +6,6 @@ Design, implementation contract, and verification for the TF Identity POC.
 -->
 
 # TF Identity POC
-
 > Design, implementation contract, and verification for this repo. Contributors and coding agents should treat this document as the source of truth.
 
 ## Background
@@ -40,16 +39,62 @@ graph TD
 ```
 ## Interaction Flow
 1. The Client goes to IDP and fetches a token. (For the POC, this is simulated as pre-signed JWT token.)
-2. Client calls Storage Tier1's List Folders API to get the list of folders for a Team1. 
-3. Storage Tier1 calls Global Tier's Discover API for the user.
+2. Client invokes Discovery API.
+    * Discovery API is served by the Global Tier service.
+    * Global Tier service provides two APIs:
+        1. /Teams: Given a user token, return list of teams this user is part of. 
+        2. The Storate Tier that the Teams lives in could be an attribute of the Team itself.
+3. Client calls Storage Tier1's List Folders API to get the list of folders for a Team1. 
+4. Storage Tier1 calls Global Tier's Discover API for the user.
     * Storage Tier will proxy caller's token to the Global Tier.
     * Global Tier will return teams that the user (subject of the token) is a member of.
-4. If Global Tier finds the token invalid or user non-existent, it returns a 401 Unauthorized error. Storage Tier will propagate the error to the client.
-5. If Team1 is not in the discover results, the Storage Tier returns a 403 Forbidden error.
-6. If Team1 is in the discover results, but Team1 is missing in Storage Tier1's Storage1DB, the Storage Tier returns a 404 Not Found error.
-7. If Team1 is in the discover results and Team1 is present in Storage Tier1's Storage1DB, the Storage Tier returns the list of folders for the team found in the database.
+5. If Global Tier finds the token invalid or user non-existent, it returns a 401 Unauthorized error. Storage Tier will propagate the error to the client.
+6. If Team1 is not in the discover results, the Storage Tier returns a 403 Forbidden error.
+7. If Team1 is in the discover results, but Team1 is missing in Storage Tier1's Storage1DB, the Storage Tier returns a 404 Not Found error.
+8. If Team1 is in the discover results and Team1 is present in Storage Tier1's Storage1DB, the Storage Tier returns the list of folders for the team found in the database.
 
 ## Implementation choices and Technical primitives
+
+### Discovery API and Global Service
+#### Logical Web API contract
+POST /discover?continuationToken=xxx
+Authorization header: Bearer <JWT token with user claims>
+Query:
+{
+  "teamIds": ["engineering", "marketing"]
+}
+Response:
+{
+  [
+    {
+      "teamId": "engineering",
+      "storageTierId": 1
+    },
+    {
+      "teamId": "marketing",
+      "storageTierId": 2
+    }
+  ]
+}
+
+### Discovery API implementation
+* Discovery data is global.
+* Global tier service powers the Discovery API.
+* Users are invited to Teams by Team Owner. This will send a magic link url to the user's email.
+* User will click the link. This will invoke /provision API on the global tier with the magic, user email and teamID.
+* Global tier will validate the magic link, and if valid, add the user team mapping in the global database.
+
+### Global Service Availability design
+* Global service (compute and DB) is hosted in a cluster that's MultiAZ. So it should be able to tolerate datacenter level failure.
+* Region level outage:
+    * We provision Compute in two seperate regions. 
+    * Load Balancer directs call to closest region from caller (geo-proximity routing).
+    * Say we are using Mongo Atlas for the DB. 
+    * We create a Multi-region cluster with replicas in both regions (5: 3 in region1, 2 in region2).
+    * Writes will go to the primary (in region1). 
+    * There is some geo-latency challenge. If call lands in region2, it will go cross-region from compute to storage. 
+    * We will setup a Virtual Private Connect / some type of connection so that traffic flows over the Cloud provider's backbone network. 
+    * This will somewhat reduce the latency and make it more predictable.
 
 ### Service implementation
 * We will implement in golang
@@ -268,3 +313,8 @@ verify complete: all counts match expected seed data
 
 ==> All good!
 ```
+## TODO
+Modify design to support these invariants and update implementation accordingly.
+1. Multiple Clouds
+2. Storate Tier and DB in multiple regions.
+3. MongoDB Atlas, CockroachDB, MySQL. Think thru.
