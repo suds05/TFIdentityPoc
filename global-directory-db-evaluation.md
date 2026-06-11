@@ -79,23 +79,23 @@ provider outages. Writes may pause or require failover during region or provider
 ##### Within Cluster
 * Each cluster will be a multi-region multi-AZ cluster serving some geographical area (GeoArea).
 * It hosted in a cloud provider across two regions that are close. (E.g., us-west1 and us-west2 in GCP). This reduces latency for synchronous replication.
-* The cluster can have 5 voting replicas spread across 4 availability zones in two regions supported by single provider: us-west1-a, us-west1-b, us-west2-a, us-west2-b.
+* The cluster can have 5 voting replicas spread across either 2 regions. Keep each replica in different AZ.
 * During normal functioning, quorum can be achieved across AZs in same region (us-west1a, us-west1b, us-west1c)
 * During outage of any one AZ, quorum will span regions. But since they are geographically close (us-west1 and us-west2), functioning will still be reasonable.
 * Reference: https://www.mongodb.com/docs/atlas/architecture/current/deployment-paradigms/multi-region
+###### 3+2 model
 ```mermaid
 graph
   subgraph us-west1
-    U1[us-west1-a]
-    U2[us-west1-b]
-    U3[us-west1-c]
+    N1[us-west1-a]
+    N2[us-west1-b]
+    N3[us-west1-c]
   end
   subgraph us-west2
-    U4[us-west2-a]
-    U5[us-west2-b]
+    N4[us-west2-a]
+    N5[us-west2-b]
   end
 ```
-
 #### Across Clusters
 * Each User (or Team) will be tied to a GeoArea during provisioning.
 * Each GeoArea will be served by one (Multi-Region Multi-AZ) cluster
@@ -103,8 +103,10 @@ graph
 * However, all clusters will have the full DirectoryDB
 * Directory Service will have a CDC Replication to propagate changes across GeoAreas.
 * This replication can be done either at:
-  * App level (Directory Service API)
+  * App level (Directory Service API) steam.
   * MongoDB CDC stream.
+* We'll have background component that pushes write stream to an egress Kafka. And from there, we'll send to Ingress Kafka of all other GeoAreas.
+And have an ingest component for each GeoArea to apply them. All of this together is our Replication Infra.
 ```mermaid
 graph
   U1[us-west]
@@ -124,7 +126,7 @@ graph
 2. Region failure. 
   * When the smaller region (us-west2) fails, there is no impact. Cluster is up.
   * When the larger region (us-west1) fails, manual failover is needed.
-  * For bigger / more popular region, there is a 7 replica setup spanning 3 regions where region outage can be tolerated. But it'll cost more. Use it for bigger regions.
+  * For bigger / more popular regions, there is a 2+2+1 topology spanning 3 regions where single region outage can be  without failover. But latency between the regions should be low enough for synchronous replication.
 3. Cloud provider or GeoArea failure.
   * A cloud provider failure will be similar to a GeoArea failure.
   * A manual failover has to be initiated. As part of failover.
@@ -133,7 +135,7 @@ graph
 
 ### Model B: Managed Global Clusters
 We will use global clusters here: https://www.mongodb.com/docs/atlas/global-clusters/
-* Here, here is concept of a `Zone` that's related to our GeoArea.
+* Here, here is concept of a `Zone` that's related to our GeoArea. Each row in the table is associated with a Zone.
 * The Global Cluster can support 70 shards, with upto 50 replicas with 7 voting replicas per shard.
 * We need to design the cluster to make sure:
 1. Voting replicas of a Zone are in proximity to the GeoArea it serves.
