@@ -61,26 +61,27 @@ We can tolerate higher write latency, but we do not want lost updates, conflicti
 
 ## Implementation choices
 Directory service compute is stateless and can be deployed in multiple regions and clouds.
-The DirectoryDB is the stateful and crucial component - how we meet requirements.
-For this, we will evaluate two storage models.
+The DirectoryDB is the stateful and crucial component. For this, we will evaluate different models.
 
-### Candidate storage technologies
-We will use two strong candidates in the SQL and NoSQL family:
+For the DB, we will consider a suitable member from SQL and NoSQL families.
 1. MongoDB / Mongo Atlas for NoSQL
 2. CockroachDB / Cockroach Cloud for SQL.
 
-We will evaluate these technologies in two storage models described below.
 
-### Model A: Self-Managed Active-Active Replication
-Directory remains read-available globally during zone, region, or
-provider outages. Writes may pause or require failover during region or provider outage.
+### Model A: Multi-Region Clusters with App-Managed Replication
+Here, each cluster will be a multi-region multi-AZ cluster serving some geographical area (GeoArea). It hosted in a cloud provider across two regions that are close latency-wise. (E.g., us-west1 and us-west2 in GCP).
+We can use different cloud providers for different clusters.
+
+Each User (or Team) will be tied to a GeoArea during provisioning. Each GeoArea will be served by one (Multi-Region Multi-AZ) cluster. Write operations for that User (or Team) will be done only by cluster serving that GeoArea. However, all clusters will have the full DirectoryDB.
+
+Asynchronous replication across clusters or GeoAreas is managed by the Application (Directory Service) with some latency. 
+
+Directory remains read-available globally during zone, region (with caveates), or cloud provider outages. Writes may pause or require failover during region or provider outage.
 
 #### MongoDB
 ##### Within Cluster
-* Each cluster will be a multi-region multi-AZ cluster serving some geographical area (GeoArea).
-* It hosted in a cloud provider across two regions that are close. (E.g., us-west1 and us-west2 in GCP). This reduces latency for synchronous replication.
-* The cluster can have 5 voting replicas spread across either 2 regions. Keep each replica in different AZ.
-* During normal functioning, quorum can be achieved across AZs in same region (us-west1a, us-west1b, us-west1c)
+* The cluster can have 5 voting replicas spread across 2 regions. Keep each replica in different AZ.
+* During normal functioning, quorum can be achieved across AZs in same region (e.g., us-west1a, us-west1b)
 * During outage of any one AZ, quorum will span regions. But since they are geographically close (us-west1 and us-west2), functioning will still be reasonable.
 * Reference: https://www.mongodb.com/docs/atlas/architecture/current/deployment-paradigms/multi-region
 ###### 3+2 model
@@ -97,11 +98,7 @@ graph
   end
 ```
 #### Across Clusters
-* Each User (or Team) will be tied to a GeoArea during provisioning.
-* Each GeoArea will be served by one (Multi-Region Multi-AZ) cluster
-* Write operations for that User (or Team) will be done only by cluster serving that GeoArea.
-* However, all clusters will have the full DirectoryDB
-* Directory Service will have a CDC Replication to propagate changes across GeoAreas.
+* Directory Service will have CDC Replication to propagate changes across GeoAreas.
 * This replication can be done either at:
   * App level (Directory Service API) steam.
   * MongoDB CDC stream.
@@ -120,8 +117,10 @@ graph
   S-.->U2
   S-.->U3
 ```
+#### CockroachDB
+TBD
 
-#### Failure modeling
+### Failure in Model A
 1. AZ failure. When one AZ in one region fails, Mongo Cluster will adjust.
 2. Region failure. 
   * When the smaller region (us-west2) fails, there is no impact. Cluster is up.
@@ -134,6 +133,8 @@ graph
     * A different cluster will takeover for write workload
 
 ### Model B: Managed Global Clusters
+
+#### MongoDB
 We will use global clusters here: https://www.mongodb.com/docs/atlas/global-clusters/
 * Here, here is concept of a `Zone` that's related to our GeoArea. Each row in the table is associated with a Zone.
 * The Global Cluster can support 70 shards, with upto 50 replicas with 7 voting replicas per shard.
@@ -141,4 +142,5 @@ We will use global clusters here: https://www.mongodb.com/docs/atlas/global-clus
 1. Voting replicas of a Zone are in proximity to the GeoArea it serves.
 2. Non-voting replicas are distributed across other GeoAreas.
 
-
+#### CockroachDB
+TBD
