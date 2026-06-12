@@ -73,23 +73,45 @@ Here, each cluster will be a multi-region multi-AZ cluster serving some geograph
 
 Each User (or Team) will be tied to a GeoArea during provisioning. Each GeoArea will be served by one (Multi-Region Multi-AZ) cluster. Write operations for that User (or Team) will be done only by cluster serving that GeoArea. However, all clusters will have the full DirectoryDB.
 
-The Cluster hosted in a cloud provider across two or three regions that are close latency-wise. (E.g., us-west1 and us-west2 in GCP). We can use different cloud providers for different clusters.
+Each Cluster can be hosted in a cloud provider across *two or three regions* that are close latency-wise. (E.g., us-west1 and us-west2 in GCP). 
 
-Asynchronous replication across GeoArea Clusters is managed by the Application (Directory Service) with some latency. 
+We can use different cloud providers for different clusters. This is a big advantage in this model.
 
+Replication across GeoArea Clusters will be Asynchronous. 
+* This replication will managed by the Application (A Sync background service). 
+* This replication can be done either at App level (Directory API-level events), or DB level (CDC events). 
+* We use some PubSub infra to disseminate and apply these events.
+* Sync service from a Cluster publishes events into its Topic/Queue
+* Sync service from Clusters subscribe to this Topic, and apply to their DB.
+* Since any row can only be updated in one Cluster (whichever Cluster serves that row's GeoArea), conflicts will not happen.
+```mermaid
+graph
+  U1[us-west]
+  U2[us-east]
+  U3[europe-west]
+  U4[emea]
+  S[Replication Infra]
+  U1-.->S
+  U2-.->S
+  U3-.->S
+  U4-.->S
+  S-.->U1
+  S-.->U2
+  S-.->U3
+  S-.->U4
+```
 #### MongoDB
-##### Within Cluster
-* Cluster can be deployed across two regions, or three regions. Pick based on availability of regions close enough with low latency.
+* Cluster can be deployed across two regions, or three regions.
+* With 2 regions, when. With 3 regions, a single region outage can be tolerated without failover. But latency between the regions should be low enough for synchronous replication.
 * Two region model
   * The cluster can have 5 voting replicas spread across 2 regions. Keep each replica in different AZ.
-  * During normal functioning, quorum can be achieved across AZs in same region (e.g., us-west1-a, us-west1-b)
-  * During outage of any one AZ, quorum will span regions. But since they are geographically close (us-west1 and us-west2), functioning will still be reasonable.
+  * It can tolerage outage of any AZ. When smaller region (us-west2) fails, there is no impact. Cluster is up. When the larger region (us-west1) fails, manual failover is     needed.
+  * During normal functioning, quorum can be achieved across AZs in same region (e.g., us-west1-a, us-west1-b). So it will be faster.
 * Three region model
   * Cluster will have 5 replicas across 3 regions (2:2:1).
   * Cluster can tolerate any region failure without failover.
   * However regions need to be close enough - else latency will impact.
 * Reference: https://www.mongodb.com/docs/atlas/architecture/current/deployment-paradigms/multi-region
-###### 3+2 model
 ```mermaid
 graph
   subgraph us-west1
@@ -102,34 +124,17 @@ graph
     N5[us-west2-b]
   end
 ```
-#### Across Clusters
-* Directory Service will have CDC Replication to propagate changes across GeoAreas.
-* This replication can be done either at App level (API level events), or MongoDB level (CDC)
-* We'll have background component that pushes stream to an egress Kafka. And from there, we'll send to Ingress Kafka of all other GeoAreas. And have an ingest component for each GeoArea to apply them. All of this together is our Replication Infra.
-```mermaid
-graph
-  U1[us-west]
-  U2[us-east]
-  U3[europe-west]
-  S[Async Replication Infra]
-  U1-.->S
-  U2-.->S
-  U3-.->S
-  S-.->U1
-  S-.->U2
-  S-.->U3
-```
-#### CockroachDB
-##### Within Cluster
-CockroachDB can be used in the same per-GeoArea model, where each GeoArea
-has its own CockroachDB cluster and the Directory service treats that
-cluster as the write authority for users or teams homed in that GeoArea.
 
-CockroachDB gives us SQL transactions and serializable isolation within a
+#### CockroachDB
+CockroachDB gives first-class SQL transactions and serializable isolation within a
 cluster. This is useful for Provisioning and Management operations because
 membership changes, team creation, team moves, and Capacity Unit updates can
 be expressed as transactional updates with uniqueness constraints, foreign
 keys, and compare-and-set style version checks.
+
+CockroachDB can be used in the same per-GeoArea model, where each GeoArea
+has its own CockroachDB cluster and the Directory service treats that
+cluster as the write authority for users or teams homed in that GeoArea. 
 
 Within a GeoArea cluster:
 * Prefer a 3-region topology if we need the cluster to remain available during
@@ -144,77 +149,6 @@ Within a GeoArea cluster:
 * Reference:
   https://www.cockroachlabs.com/docs/stable/multiregion-overview.html
 
-For table placement, there are two useful patterns:
-* `REGIONAL BY ROW` for rows that have a clear home GeoArea, such as user-team
-  membership and team routing records. This keeps reads and writes for a
-  homed user or team close to that GeoArea.
-* `GLOBAL` for small, read-mostly reference tables that need low-latency reads
-  from all regions in the cluster, such as Capacity Unit discovery metadata.
-  Writes to `GLOBAL` tables have higher latency and should be reserved for
-  read-mostly data.
-* Reference: https://www.cockroachlabs.com/docs/stable/table-localities.html
-
-###### 3-region model
-```mermaid
-graph
-  subgraph us-west1
-    N1[us-west1-a]
-    N2[us-west1-b]
-    N3[us-west1-c]
-  end
-  subgraph us-west2
-    N4[us-west2-a]
-    N5[us-west2-b]
-    N6[us-west2-c]
-  end
-  subgraph us-central1
-    N7[us-central1-a]
-    N8[us-central1-b]
-    N9[us-central1-c]
-  end
-```
-
-##### Across Clusters
-Cross-GeoArea replication is still application-managed in Model A.
-CockroachDB can emit changefeeds to Kafka, and the Replication Infra can
-consume those events and apply them to every other GeoArea cluster.
-
-Replication rules should be explicit:
-* There is a single write authority for each User or Team at any moment.
-* Each mutable row carries a monotonically increasing version or update
-  timestamp assigned by the write authority.
-* Ingest into remote GeoAreas is idempotent and rejects stale versions.
-* Moving a User or Team between GeoAreas is a management operation that first
-  freezes writes for that object, transfers ownership, then resumes writes in
-  the destination GeoArea.
-* Reference: https://www.cockroachlabs.com/docs/stable/changefeeds.html
-
-### Failure in Model A
-1. AZ failure.
-  * MongoDB cluster will adjust.
-  * CockroachDB with `SURVIVE ZONE FAILURE` or `SURVIVE REGION FAILURE` should
-    continue serving reads and writes as long as enough replicas remain for
-    quorum.
-2. Region failure. 
-  * For MongoDB with 2 regions, when the smaller region (us-west2) fails, there is no impact.
-    Cluster is up. When the larger region (us-west1) fails, manual failover is
-    needed. With 3 regions, a single region outage can be tolerated without
-    failover. But latency between the regions should be low enough for
-    synchronous replication.
-  * For CockroachDB, use 3 or more regions and `SURVIVE REGION FAILURE` if the
-    GeoArea cluster must tolerate a single full-region outage automatically.
-    A 2-region CockroachDB cluster should not be treated as region-survivable
-    unless the replica placement and quorum behavior have been validated for
-    that exact failure mode.
-3. Cloud provider or GeoArea failure.
-  * A cloud provider failure will be similar to a GeoArea failure.
-  * A manual failover has to be initiated. As part of failover.
-    * All Teams and Users in affected GeoArea will homed to a different GeoArea
-    * A different cluster will takeover for write workload
-    * For CockroachDB, this failover is at the application ownership layer in
-      Model A. The failed cluster is not synchronously participating in commits
-      from other GeoAreas.
-
 ### Model B: Managed Global Database
 In this model:
 * Directory service compute is deployed close to clients in all target regions.
@@ -223,49 +157,39 @@ In this model:
 * Directory writes are coordinated by the database, avoiding app-managed
   cross-GeoArea conflict resolution.
 
-This model applies to both MongoDB Atlas Global Clusters and CockroachDB
-multi-region/global deployments. Note however that global multi-provider deployment
-does not seem to be supported. We need to go with one provider.
+In this model, the replication and consistency is handled by the database. This is a big benefit.
+
+However, multi-provider deployment does not seem to be supported. We need to go with one provider. This is a limitation.
 
 #### MongoDB
-* We will use global clusters as described here: https://www.mongodb.com/docs/atlas/global-clusters/
-* Mongo Global cluster has concept of a `Zone` that's related to our GeoArea. 
-* Each row in the table is associated with a Zone.
-* We use Zone to map documents to geographically local shards.
-* We need to design the cluster to make sure:
-  1. Voting replicas of a Zone are in proximity to the GeoArea it serves.
-  2. Non-voting replicas are distributed across other GeoAreas.
-* The Global Cluster can support 70 shards, with upto 50 replicas with 7 voting replicas per shard. This should let us cover many GeoAreas
+We will use Global Clusters as described here: https://www.mongodb.com/docs/atlas/global-clusters/. Mongo Global cluster has concept of a `Zone` that's related to our GeoArea. Each row in the table is associated with a Zone.
+
+MongoDB Atlas Global Cluster with Zones:
+- Optimizes writes and primary reads for each document's home GeoArea.
+- Can provide low-latency reads from other GeoAreas only by placing read-only
+  secondary nodes for each zone in those other GeoAreas and using nearest/tagged
+  secondary read preferences.
+- Remote fast reads are eventually consistent and may observe replication lag.
+- Queries must include the shard key/location field to avoid scatter-gather reads.
+
+We use Zone to map documents to geographically local shards. We need to design the cluster to make sure:
+  1. Voting replicas of a Zone are in proximity to the GeoArea it serves. That way
+     Writes are low-latency in this GeoArea.
+  2. Non-voting replicas are spread across other GeoAreas. This will make sure
+     Reads are low latency globally.
+
+Global Cluster can support up to nine distinct Zones. This is a tight limit if GeoArea maps 1:1 to Zone.
 
 #### CockroachDB
-* CockroachDB also supports global database instead
-  of separate per-GeoArea databases with application-managed replication.
-* Use CockroachDB's `REGIONAL BY ROW` and GeoArea column  to place Users or Teams
-  in their GeoArea.
-* Configure the database with the set of regions where Directory service runs.
-* Use `SURVIVE REGION FAILURE` if the managed topology supports the required
-  number and placement of regions.
-* Use `SURVIVE ZONE FAILURE` if lower write latency is more important than
-  automatic full-region failure tolerance.
+CockroachDB also supports global database instead of separate per-GeoArea databases with application-managed replication.
 
-```mermaid
-graph
-  subgraph Directory Service
-    DS1[us-west service]
-    DS2[us-east service]
-    DS3[europe-west service]
-  end
-  subgraph CockroachDB Global Database
-    R1[REGIONAL BY ROW: us-west rows]
-    R2[REGIONAL BY ROW: us-east rows]
-    R3[REGIONAL BY ROW: europe-west rows]
-    G[GLOBAL: read-mostly metadata]
-  end
-  DS1---R1
-  DS2---R2
-  DS3---R3
-  DS1---G
-  DS2---G
-  DS3---G
-```
+For table placement, there are two useful patterns:
+* `REGIONAL BY ROW` for rows that have a clear home GeoArea, such as user-team
+  membership and team routing records. This keeps reads and writes for a
+  homed user or team close to that GeoArea.
+* `GLOBAL` for tables that need low-latency reads from all regions in the cluster. 
+  Writes to `GLOBAL` tables have higher latency and should be reserved for read-mostly
+  data.
+
+In our case, we can model the Users and Teams as GLOBAL table. This will give low latency reads, but writes will be somewhat higher latency.
 
