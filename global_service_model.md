@@ -187,8 +187,9 @@ All Service instances connect to one managed Global DB cluster that's spread acr
 at least 3 regions, and 6 AZs.
 
 ```mermaid
-graph TB
+graph LR
   subgraph NAM
+    direction TB
     NAM_A1["A_Primary"]
     NAM_A2["A"]
     NAM_C["C"]
@@ -197,8 +198,8 @@ graph TB
   end
 
   subgraph EUR
+    direction TB
     EUR_A1["A"]
-    EUR_A2["A"]
     EUR_C1["C"]
     EUR_C2["C"]
     EUR_B1["B_Primary"]
@@ -206,12 +207,13 @@ graph TB
   end
 
   subgraph APC
+    direction TB
     APC_C1["C_Primary"]
     APC_C2["C"]
-    APC_A["A"]
+    APC_A1["A"]
+    APC_A2["A"]
     APC_B["B"]
   end
-
 ```
 
 In the above example:
