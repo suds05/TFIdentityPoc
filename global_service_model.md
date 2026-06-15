@@ -20,13 +20,13 @@ These top-level entities are typically used for discovery, authorization and rou
 Entities underneath the top-level entities are typically homed in one of many Capacity Units
 that are deployed in several regions.
 
-**The harder question we try to answer here is, how do we implement a Global service
+**The harder question we try to answer here is, how do we implement a Global Service
 to support these top-level entities?**
 
-These are accessed from multiple Capacity Units and Clients from various regions. In which region do we deploy the Global service? How do we ensure their availability. And how we reduce geo-latency to access them.
+These are accessed from multiple Capacity Units and Clients from various regions. In which regions do we deploy Global Service stamps? How do we ensure their availability? And how do we reduce geo-latency to access them?
 
 ## Requirements
-1. The Global service (and DB) must be hosted so that geo-latency to reach it is minimal
+1. The Global Service (and DB) must be hosted so that geo-latency to reach it is minimal
 for Clients and Capacity Units. Callers can be present anywhere in the world, and we
 would prefer calls to be served from a region close to them.
 
@@ -36,14 +36,14 @@ typically operate from a office in one location, etc.
 
 Design must exploit such affinities to give optimal latency. But work globally otherwise too.
 
-2. The Global service (and DB) must remain highly available across infrastructure
+2. The Global Service (and DB) must remain highly available across infrastructure
 failures, including:
 - Availability zone failure
 - Single Region failure
 - Single Cloud provider failure
 In essense, the deployment must be multi-region and multi-cloud.
 
-3. Global service should be optimal for a read-heavy workload.
+3. Global Service should be optimal for a read-heavy workload.
 The top level objects are typically read more often than written. Read scenarios include:
 - Authorization lookup: determine whether a user has access to a team.
 - Routing lookup: determine which Capacity Unit hosts a team.
@@ -63,17 +63,20 @@ We can tolerate some latency (design parameter to be minimized), but we do not w
 
 
 ## Architectural models
-The Global service (compute) is stateless. Global Service instances can be
+Here, we use the following terminology:
+- The Global Service is the logical service/API for top-level entities.
+- A Global Service stamp is a deployed copy of the Global Service in a specific
+  region / provider / AZ scope, behind regional routing or load balancing.
+- A Global Service instance is a single running pod, VM, or process inside a
+  Global Service stamp.
+- The Global DB is the logical database used by the Global Service.
+- A Global DB cluster is a physical database cluster that houses the Global DB.
+
+The Global Service compute layer is stateless. Global Service stamps can be
 deployed in multiple regions / providers, and are typically deployed in several
 edge locations to remain close to users.
 
-The Global DB (storage) is the data used by the Global service. A Global DB cluster
-is a physical database cluster that houses the Global DB. The deployment and usage
-of Global DB clusters is the trickier part of the design.
-
-In the models below:
-- Owner DB cluster means the Global DB cluster currently allowed to write a GeoShard.
-- Replica DB cluster means a Global DB cluster holding an async replicated copy of a GeoShard.
+The deployment and usage of Global DB clusters is the trickier part of the design.
 
 We will look at two architectural models. We will assess implementing each with suitable member from the broad SQL and NoSQL families:
 1. MongoDB / Mongo Atlas for NoSQL
@@ -85,7 +88,7 @@ Here, we will deploy Global DB clusters in each Geographic Area (`GeoArea`) we w
 
 For instance, we could support North America (NAM), Europe (EUR), Asia Pacific (APC) as our three GeoAreas. We can correspondingly have three Global DB clusters, say in us-west1, europe-west1 and asia-southeast2. Each Global DB cluster could use 3 Availability Zones within the region. We can use different cloud providers for different Global DB clusters. Cross-provider support is a big advantage in this model.
 
-Global Service instances can be deployed in many more regions - say us-west1, us-west2, europe-west1, europe-east1, etc. The Service instances will all use these three Global DB clusters.
+Global Service stamps can be deployed in many more regions - say us-west1, us-west2, europe-west1, europe-east1, etc. The Global Service instances in those stamps will all use these three Global DB clusters.
 
 All rows or documents in any table or collection of the global data will be part of a
 application level shard. Say we call this `GeoShard`. Location aware objects like User (or Team) can be tied to a GeoShard during provisioning based on user's location. Location independent can be placed in some GeoShard based on some consistent hashing. The shard
@@ -95,9 +98,9 @@ All GeoShards will be present in all Global DB clusters, and all Global DB clust
 
 However, Write operations for a GeoShard will happen only from one Owner DB cluster. **This is the key design invariant that preserves data consistency**. While all Global DB clusters are active and all of them can handle traffic, update for a row or document will happen only at the Owner DB cluster. We will have a mapping of GeoShardId to Owner DB cluster as a metadata table.
 
-Read operations for a GeoShard can happen from any Global DB cluster. However, Service instances
-will preserve affinity for a client: if it used a Global DB cluster for a client recently,
-it will use the same. That way, an update was recently done, subsequent requests from client
+Read operations for a GeoShard can happen from any Global DB cluster. However, Global Service instances
+will preserve affinity for a client: if an instance used a Global DB cluster for a client recently,
+the instance will use the same cluster. That way, when an update was recently done, subsequent requests from client
 go to same Global DB cluster (for read-your-own-writes)
 
 ```mermaid
@@ -105,11 +108,11 @@ graph
   CL[Client]
   CL-->C1
   CL-->S
-  C1[Service NAM1]
+  C1[Service Stamp NAM1]
   U1[NAM Global DB Cluster]
   U2[EUR Global DB Cluster]
   U3[APC Global DB Cluster]
-  S[Service EUR1]
+  S[Service Stamp EUR1]
   C1-->U1
   C1-.->U2
   C1-.->U3
@@ -118,14 +121,14 @@ graph
   S-.->U3
 ```
 #### Geo-latency
-Client call will land on the regional service deployment that is closest in terms of geo-latency
+Client call will land on the Global Service stamp that is closest in terms of geo-latency
 via some Global External Load Balancer or Frontdoor.
 
-For read requests, the Service instance will invoke the Global DB cluster that's closest. This
+For read requests, the serving Global Service instance will invoke the Global DB cluster that's closest. This
 can again be done by some Load Balancer via Shared URL. E.g.,
-any Service instance in NAM will end up calling NAM Global DB cluster for low latencies.
+any Global Service instance in a NAM stamp will end up calling NAM Global DB cluster for low latencies.
 
-For write requests, the Service instance will explicitly invoke the Owner DB cluster
+For write requests, the serving Global Service instance will explicitly invoke the Owner DB cluster
 that owns the GeoShard in question. This may be a relatively expensive call.
 
 #### Replication
@@ -160,9 +163,10 @@ graph
 ```
 
 #### Failure model and Failovers
-In this model, Service instance failure is transparent. Client call will reach
-a different regional Service instance via Global Load Balancer or Frontdoor. The Global service
-is truly Active-Active.
+In this model, Global Service instance failure is transparent. A client call will reach
+another healthy instance in the same stamp. Global Service stamp failure is also transparent
+because the client call will reach a different healthy stamp via Global Load Balancer or
+Frontdoor. The Global Service is truly Active-Active.
 
 Single Availability Zone(AZ) Failure can be tolerated in a Global DB cluster, as it spans three AZs.
 
@@ -170,8 +174,8 @@ If there is a Region Failure, the corresponding Global DB cluster will be down.
   * However Read traffic can continue to be served by some other Global DB cluster.
   * Write traffic to unaffected GeoShards continues to get served.
   * For Failover, the failed Global DB cluster is put in maintenance mode and Metadata tables
-    mapping GeoShard to Owner DB cluster need to be updated. Then Service instances will go to the new
-    Owner DB cluster for affected GeoShards.
+    mapping GeoShard to Owner DB cluster need to be updated. Then Global Service instances will 
+    go to the new Owner DB cluster for affected GeoShards.
 
 Cloud Provider failure will be similar to Region failure. Some Global DB clusters may go down.
 But other Global DB clusters (using different Cloud Providers) will serve Read Traffic.
@@ -181,9 +185,9 @@ And Failover can be done to these Global DB clusters for affected GeoShards.
 In this model, we try to push the replication into the database itself by
 creating a managed multi-region Global DB cluster.
 
-Service instances are deployed close to clients in all/multiple regions.
+Global Service stamps are deployed close to clients in all/multiple regions.
 
-All Service instances connect to one managed Global DB cluster that's spread across
+All Global Service instances connect to one managed Global DB cluster that's spread across
 at least 3 regions, and 6 AZs.
 
 ```mermaid
