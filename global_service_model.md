@@ -71,6 +71,10 @@ Here, we use the following terminology:
   Global Service stamp.
 - The Global DB is the logical database used by the Global Service.
 - A Global DB cluster is a physical database cluster that houses the Global DB.
+- A GeoArea is a area of geographic affinity in the application, such as NAM, EUR, or APC.
+- A GeoAreaId is the row or document field that identifies the GeoArea for an object.
+- A GeoArea can be implemented using multiple physical database shards
+- An Owner DB cluster is the Global DB cluster currently allowed to write a GeoArea.
 
 The Global Service compute layer is stateless. Global Service stamps can be
 deployed in multiple regions / providers, and are typically deployed in several
@@ -90,15 +94,16 @@ For instance, we could support North America (NAM), Europe (EUR), Asia Pacific (
 
 Global Service stamps can be deployed in many more regions - say us-west1, us-west2, europe-west1, europe-east1, etc. The Global Service instances in those stamps will all use these three Global DB clusters.
 
-All rows or documents in any table or collection of the global data will be part of a
-application level shard. Say we call this `GeoShard`. Location aware objects like User (or Team) can be tied to a GeoShard during provisioning based on user's location. Location independent can be placed in some GeoShard based on some consistent hashing. The shard
-is present as `GeoShardId` on the row or document.
+All rows or documents in any table or collection of the global data will be tied
+to a `GeoAreaId`. Location aware objects like User (or Team) can be tied to a
+GeoArea during provisioning based on user's location. Location independent objects
+can be placed in a GeoArea based on some consistent hashing.
 
-All GeoShards will be present in all Global DB clusters, and all Global DB clusters are active. Hence the name: `Multi-Active GeoArea DB Clusters`.
+All GeoAreas will be present in all Global DB clusters, and all Global DB clusters are active. Hence the name: `Multi-Active GeoArea DB Clusters`.
 
-However, Write operations for a GeoShard will happen only from one Owner DB cluster. **This is the key design invariant that preserves data consistency**. While all Global DB clusters are active and all of them can handle traffic, update for a row or document will happen only at the Owner DB cluster. We will have a mapping of GeoShardId to Owner DB cluster as a metadata table.
+However, Write operations for a GeoArea will happen only from one Owner DB cluster. **This is the key design invariant that preserves data consistency**. While all Global DB clusters are active and all of them can handle traffic, update for a row or document will happen only at the Owner DB cluster. We will have a mapping of GeoAreaId to Owner DB cluster as a metadata table.
 
-Read operations for a GeoShard can happen from any Global DB cluster. However, Global Service instances
+Read operations for a GeoArea can happen from any Global DB cluster. However, Global Service instances
 will preserve affinity for a client: if an instance used a Global DB cluster for a client recently,
 the instance will use the same cluster. That way, when an update was recently done, subsequent requests from client
 go to same Global DB cluster (for read-your-own-writes)
@@ -129,11 +134,11 @@ can again be done by some Load Balancer via Shared URL. E.g.,
 any Global Service instance in a NAM stamp will end up calling NAM Global DB cluster for low latencies.
 
 For write requests, the serving Global Service instance will explicitly invoke the Owner DB cluster
-that owns the GeoShard in question. This may be a relatively expensive call.
+that owns the GeoArea in question. This may be a relatively expensive call.
 
 #### Replication
 Replication across GeoArea DB clusters will be Asynchronous. Note that this replication has to be:
-1. Bidirectional. Any two Global DB clusters will exchange CDC events for GeoShards they write to.
+1. Bidirectional. Any two Global DB clusters will exchange CDC events for GeoAreas they write to.
 2. Multi-way. A Global DB cluster could send and receive events from more than one Global DB cluster.
 This type of Bidirectional Multi-Way replication is not supported natively by Database systems.
 
@@ -172,21 +177,20 @@ Single Availability Zone(AZ) Failure can be tolerated in a Global DB cluster, as
 
 If there is a Region Failure, the corresponding Global DB cluster will be down.
   * However Read traffic can continue to be served by some other Global DB cluster.
-  * Write traffic to unaffected GeoShards continues to get served.
+  * Write traffic to unaffected GeoAreas continues to get served.
   * For Failover, the failed Global DB cluster is put in maintenance mode and Metadata tables
-    mapping GeoShard to Owner DB cluster need to be updated. Then Global Service instances will 
-    go to the new Owner DB cluster for affected GeoShards.
+    mapping GeoAreaId to Owner DB cluster need to be updated. Then Global Service instances will
+    go to the new Owner DB cluster for affected GeoAreas.
 
 Cloud Provider failure will be similar to Region failure. Some Global DB clusters may go down.
 But other Global DB clusters (using different Cloud Providers) will serve Read Traffic.
-And Failover can be done to these Global DB clusters for affected GeoShards.
+And Failover can be done to these Global DB clusters for affected GeoAreas.
 
 ### Model B: Managed Global Database
 In this model, we try to push the replication into the database itself by
 creating a managed multi-region Global DB cluster.
 
 Global Service stamps are deployed close to clients in all/multiple regions.
-
 All Global Service instances connect to one managed Global DB cluster that's spread across
 at least 3 regions, and 6 AZs.
 
@@ -194,59 +198,68 @@ at least 3 regions, and 6 AZs.
 graph LR
   subgraph NAM
     direction TB
-    NAM_A1["A_Primary"]
-    NAM_A2["A"]
-    NAM_C["C"]
-    NAM_B1["B"]
-    NAM_B2["B"]
+    NAM_AP["A_Primary"]
+    NAM_AV1["A_Voting"]
+    NAM_AV2["A_Voting"]
+    NAM_CR["C_Read"]
+    NAM_BR["B_Read"]
   end
 
   subgraph EUR
     direction TB
-    EUR_A1["A"]
-    EUR_C1["C"]
-    EUR_C2["C"]
-    EUR_B1["B_Primary"]
-    EUR_B2["B"]
+    EUR_AR["A_Read"]
+    EUR_CR["C_Read"]
+    EUR_BP["B_Primary"]
+    EUR_B1["B_Voting"]
+    EUR_B2["B_Voting"]
   end
 
   subgraph APC
     direction TB
-    APC_C1["C_Primary"]
-    APC_C2["C"]
-    APC_A1["A"]
-    APC_A2["A"]
-    APC_B["B"]
+    APC_CP["C_Primary"]
+    APC_CV1["C_Voting"]
+    APC_AR["A_Read"]
+    APC_BR["B_Read"]
+    APC_CV2["C_Voting"]
   end
 ```
 
 In the above example:
-1. GeoShard (and underlying ReplicaSet hosting it) A has its primary node in NAM
-2. GeoShard A also has its secondary nodes in EUR and APC.
-3. Replication between the Primary and Secondary node is handled by the database.
+1. GeoArea A has its primary and voting replicas in NAM.
+2. GeoArea A also has its read-only non-voting replicas in EUR and APC.
+3. Replication between the nodes is handled by the database.
+4. Automatic failover within the Voting nodes is handled by the database.
 
-In this model, the replication and consistency is handled by the database. This is a big benefit.
+In this model, the replication and consistency is handled by the database. This
+is a big benefit.
 
-However, multi-provider deployment does not seem to be supported. We need to go with one provider. This is a limitation.
+The primary limitation will be on scaling. The maximum number of Zones or GeoAreas
+can be limited by the Database tech (e.g., 9 Zones in Mongo)
 
 #### MongoDB
-We will use Global Clusters as described here: https://www.mongodb.com/docs/atlas/global-clusters/. Mongo Global cluster has concept of a `Zone` that's related to our GeoArea. Each row in the table is associated with a Zone.
+We will use Global Clusters as described here: https://www.mongodb.com/docs/atlas/global-clusters/. Mongo Global cluster
+has concept of a `Zone` that nicely maps to our GeoArea.
 
-MongoDB Atlas Global Cluster with Zones:
-- Optimizes writes and primary reads for each document's home GeoArea.
-- Can provide low-latency reads from other GeoAreas only by placing read-only
-  secondary nodes for each zone in those other GeoAreas and using nearest/tagged
-  secondary read preferences.
-- Remote fast reads are eventually consistent and may observe replication lag.
-- Queries must include the shard key/location field to avoid scatter-gather reads.
+Each row or document in the table is associated with a GeoArea as before. In MongoDB, we map these GeoAreas
+to Zones. Thus we'll have three Zones:
+* NAM
+* EUR
+* APC
 
-We use Zone to map documents to geographically local shards. We need to design the cluster to make sure:
-  1. Voting replicas of a Zone are in proximity to the GeoArea it serves. That way
-     Writes are low-latency in this GeoArea.
-  2. Non-voting replicas are spread across other GeoAreas. This will make sure
-     Reads are low latency globally.
+For each Zone (and GeoArea), we will pick one region where voting replicas will live.
+Writes happen in this region alone. Say, for NAM, we use us-west1 in AWS.
+For EUR, we use europe-west2 in GCP. And for APC, we use westindia in Azure.
+**Note: The Voting replicas should be mapped to one region in one cloud provider.
+If they are spread across regions, writes can become slow**
 
-Global Cluster can support up to nine distinct Zones. This is a tight limit if GeoArea maps 1:1 to Zone.
+We will add Non-voting replicas in each of the other GeoAreas. This will make sure
+Reads are low latency globally.
+
+![Zone configuration in Mongo Atlas](zone_config_mongo_atlas.png)
+
+![Zone to region mapping in Mongo Atlas](zone_region_mapping_mongo_atlas.png)
+
+Global Cluster can support up to nine distinct Zones. Zone Scaling is a limitation in this architecture.
 
 #### CockroachDB
 CockroachDB also supports global database instead of separate per-GeoArea databases with application-managed replication.
